@@ -257,6 +257,7 @@ public class PongGame : MonoBehaviour
         scoreLeft = scoreRight = 0;
         timeLeft = MatchTime;
         transitionTimer = 0f;
+        ball.gameObject.SetActive(true);                 // mostra a bola de volta
         left.position  = new Vector3(-paddleX, 0, 0);
         right.position = new Vector3(paddleX, 0, 0);
         ResetBall(Random.value < 0.5f ? 1 : -1);
@@ -301,6 +302,7 @@ public class PongGame : MonoBehaviour
     {
         banner = msg;
         transitionTimer = TransitionTime;
+        ball.gameObject.SetActive(false);                // esconde a bola na contagem
     }
 
     // Desenha placar, linha do meio e mensagens na tela.
@@ -314,13 +316,13 @@ public class PongGame : MonoBehaviour
         GUI.color = Color.white;
 
         // ---- Placar do topo ----
-        // Nivel atual no CANTO SUPERIOR ESQUERDO
-        var lvl = new GUIStyle { fontSize = 24, alignment = TextAnchor.UpperLeft, fontStyle = FontStyle.Bold };
+        // Nivel atual no CANTO SUPERIOR ESQUERDO (fonte 4x maior)
+        var lvl = new GUIStyle { fontSize = 96, alignment = TextAnchor.UpperLeft, fontStyle = FontStyle.Bold };
         lvl.normal.textColor = new Color(0.55f, 0.85f, 1f);
-        GUI.Label(new Rect(16, 12, 280, 32), "Level " + level, lvl);
-        var lvlSub = new GUIStyle { fontSize = 13, alignment = TextAnchor.UpperLeft };
+        GUI.Label(new Rect(16, 6, 640, 130), "Level " + level, lvl);
+        var lvlSub = new GUIStyle { fontSize = 24, alignment = TextAnchor.UpperLeft };
         lvlSub.normal.textColor = new Color(1, 1, 1, 0.4f);
-        GUI.Label(new Rect(18, 42, 200, 20), "de " + MaxLevel, lvlSub);
+        GUI.Label(new Rect(22, 124, 300, 32), "de " + MaxLevel, lvlSub);
 
         // Pontuacao grande:  3   -   1
         var big = new GUIStyle { fontSize = 44, alignment = TextAnchor.UpperCenter };
