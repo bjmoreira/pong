@@ -15,12 +15,14 @@ public class PongGame : MonoBehaviour
     const float BallSize      = 0.3f;
     const float BallStartSpeed = 7f;    // velocidade inicial da bola
     const float BallSpeedup   = 0.35f;  // quanto a bola acelera a cada rebatida
-    const int   ScoreToWin    = 5;      // pontos para vencer
+    const int   PointsToWin   = 5;      // chegar a 5 pontos vence a partida
+    const float MatchTime     = 60f;    // cada partida dura no maximo 60 segundos
+    const int   MaxLevel      = 50;     // total de niveis de dificuldade
     const bool  TwoPlayer     = false;  // false = voce vs CPU | true = 2 jogadores
 
-    // ---- Niveis de dificuldade (controlam quao boa e a IA) ----
-    enum Difficulty { Facil, Medio, Dificil }
-    Difficulty difficulty = Difficulty.Facil;   // comeca no facil
+    // ---- Progressao ----
+    int   level = 1;        // nivel atual (1 a 50): sobe ao vencer, zera ao perder
+    float timeLeft;         // segundos restantes na partida atual
 
     // ---- Estado interno ----
     Camera cam;
@@ -28,7 +30,7 @@ public class PongGame : MonoBehaviour
     Vector2 ballVel;
     float halfWidth, halfHeight, paddleX;
     int scoreLeft, scoreRight;
-    bool gameOver;
+    bool matchOver;
     string message = "";
 
     // Faz o jogo se montar sozinho assim que a cena carrega,
@@ -68,7 +70,7 @@ public class PongGame : MonoBehaviour
 
         ball  = MakeBlock("Ball", BallSize, BallSize, Color.white);
 
-        ResetBall(Random.value < 0.5f ? 1 : -1);
+        StartMatch();
     }
 
     // Cria um retangulo (cubo achatado) com material que aparece em qualquer
@@ -100,19 +102,19 @@ public class PongGame : MonoBehaviour
 
     void Update()
     {
-        // Troca de dificuldade a qualquer momento com as teclas 1, 2, 3
-        if (Input.GetKeyDown(KeyCode.Alpha1)) difficulty = Difficulty.Facil;
-        if (Input.GetKeyDown(KeyCode.Alpha2)) difficulty = Difficulty.Medio;
-        if (Input.GetKeyDown(KeyCode.Alpha3)) difficulty = Difficulty.Dificil;
-
-        if (gameOver)
+        // Entre partidas: espera ESPACO para iniciar a proxima
+        if (matchOver)
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                scoreLeft = scoreRight = 0;
-                gameOver = false;
-                ResetBall(Random.value < 0.5f ? 1 : -1);
-            }
+            if (Input.GetKeyDown(KeyCode.Space)) StartMatch();
+            return;
+        }
+
+        // Cronometro: quando zera, quem tiver mais pontos vence
+        timeLeft -= Time.deltaTime;
+        if (timeLeft <= 0f)
+        {
+            timeLeft = 0f;
+            DecideByTime();
             return;
         }
 
@@ -162,8 +164,8 @@ public class PongGame : MonoBehaviour
         ball.position = p;
 
         // Ponto: bola passou de um dos lados
-        if (p.x < -halfWidth)      { scoreRight++; CheckWin(); ResetBall(1);  }
-        else if (p.x > halfWidth)  { scoreLeft++;  CheckWin(); ResetBall(-1); }
+        if (p.x < -halfWidth)      { scoreRight++; CheckMatchPoint(); ResetBall(1);  }
+        else if (p.x > halfWidth)  { scoreLeft++;  CheckMatchPoint(); ResetBall(-1); }
     }
 
     void MovePaddle(Transform t, float dir)
@@ -185,32 +187,17 @@ public class PongGame : MonoBehaviour
     }
 
     // Inteligencia artificial da raquete da direita.
-    // Cada dificuldade muda 3 coisas: velocidade da IA, "zona morta"
-    // (margem em que ela nao se move) e se ela so reage quando a bola vem.
+    // A forca dela escala com o nivel (1 = facil, 50 = quase perfeita) atraves
+    // de 3 valores: velocidade, "zona morta" e se so reage com a bola vindo.
     void UpdateAI()
     {
-        float maxSpeed;      // velocidade maxima da IA (player tem PaddleSpeed = 10)
-        float deadzone;      // se estiver perto do alvo dentro dessa margem, nao mexe
-        bool reactOnlyWhenApproaching;  // ignora a bola quando ela esta indo embora
+        // t vai de 0 (nivel 1) ate 1 (nivel 50). Tudo na IA escala com ele.
+        float t = (level - 1) / (float)(MaxLevel - 1);
 
-        switch (difficulty)
-        {
-            case Difficulty.Facil:   // lenta, preguicosa e imprecisa
-                maxSpeed = PaddleSpeed * 0.40f;
-                deadzone = 1.0f;
-                reactOnlyWhenApproaching = true;
-                break;
-            case Difficulty.Medio:   // razoavel, mas vencivel
-                maxSpeed = PaddleSpeed * 0.65f;
-                deadzone = 0.45f;
-                reactOnlyWhenApproaching = true;
-                break;
-            default:                 // Dificil: rapida e precisa
-                maxSpeed = PaddleSpeed * 0.95f;
-                deadzone = 0.10f;
-                reactOnlyWhenApproaching = false;
-                break;
-        }
+        // Mathf.Lerp(a, b, t) mistura de 'a' (t=0) ate 'b' (t=1).
+        float maxSpeed = Mathf.Lerp(PaddleSpeed * 0.35f, PaddleSpeed * 1.10f, t); // lenta -> mais rapida que voce
+        float deadzone = Mathf.Lerp(1.30f, 0.04f, t);                            // preguicosa -> precisa
+        bool reactOnlyWhenApproaching = t < 0.5f;                                // ate o nivel ~25 ela relaxa
 
         // Decide para onde a IA quer ir:
         // - se a bola vem na direcao dela, persegue a altura da bola
@@ -262,57 +249,107 @@ public class PongGame : MonoBehaviour
         p.x = pp.x + reflectDir * (pw + ballHalf);
     }
 
-    void CheckWin()
+    // Comeca uma nova partida: zera placar, reinicia cronometro e centraliza tudo.
+    void StartMatch()
     {
-        if (scoreLeft >= ScoreToWin)
+        scoreLeft = scoreRight = 0;
+        timeLeft = MatchTime;
+        matchOver = false;
+        left.position  = new Vector3(-paddleX, 0, 0);
+        right.position = new Vector3(paddleX, 0, 0);
+        ResetBall(Random.value < 0.5f ? 1 : -1);
+    }
+
+    // Chamado a cada ponto: alguem chegou a 5? Entao a partida acabou.
+    void CheckMatchPoint()
+    {
+        if (scoreLeft >= PointsToWin)       PlayerWins();
+        else if (scoreRight >= PointsToWin) PlayerLoses();
+    }
+
+    // Tempo esgotado: quem tiver mais pontos vence; empate repete o mesmo nivel.
+    void DecideByTime()
+    {
+        if (scoreLeft > scoreRight)      PlayerWins();
+        else if (scoreRight > scoreLeft) PlayerLoses();
+        else
         {
-            gameOver = true;
-            message = TwoPlayer ? "Jogador 1 venceu!" : "Voce venceu!";
+            matchOver = true;
+            message = "TEMPO ESGOTADO - EMPATE!\nRepete o nivel " + level;
         }
-        else if (scoreRight >= ScoreToWin)
+    }
+
+    // Jogador venceu: avanca de nivel (ou zera o jogo ao passar do nivel 50).
+    void PlayerWins()
+    {
+        matchOver = true;
+        if (level >= MaxLevel)
+            message = "INCRIVEL! Voce zerou os " + MaxLevel + " niveis!";
+        else
         {
-            gameOver = true;
-            message = TwoPlayer ? "Jogador 2 venceu!" : "A CPU venceu!";
+            level++;
+            message = "Voce venceu!\nAvancando para o nivel " + level;
         }
+    }
+
+    // Jogador perdeu para a maquina: volta para o nivel 1.
+    void PlayerLoses()
+    {
+        matchOver = true;
+        message = "A CPU venceu...\nVoce volta para o nivel 1";
+        level = 1;
     }
 
     // Desenha placar, linha do meio e mensagens na tela.
     void OnGUI()
     {
-        // Linha pontilhada no centro
+        // Linha pontilhada no centro (comeca abaixo do placar)
         GUI.color = new Color(1, 1, 1, 0.15f);
         float cx = Screen.width / 2f - 2;
-        for (float y = 10; y < Screen.height; y += 40)
+        for (float y = 130; y < Screen.height; y += 40)
             GUI.DrawTexture(new Rect(cx, y, 4, 24), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        // Placar
-        var score = new GUIStyle { fontSize = 48, alignment = TextAnchor.UpperCenter };
-        score.normal.textColor = Color.white;
-        GUI.Label(new Rect(Screen.width / 2f - 200, 20, 150, 60), scoreLeft.ToString(),  score);
-        GUI.Label(new Rect(Screen.width / 2f + 50,  20, 150, 60), scoreRight.ToString(), score);
+        // ---- Placar do topo ----
+        // Nivel atual
+        var lvl = new GUIStyle { fontSize = 18, alignment = TextAnchor.UpperCenter };
+        lvl.normal.textColor = new Color(0.55f, 0.85f, 1f);
+        GUI.Label(new Rect(0, 8, Screen.width, 24), "NIVEL  " + level + " / " + MaxLevel, lvl);
 
-        // Dica de controles
-        var hint = new GUIStyle { fontSize = 16, alignment = TextAnchor.LowerCenter };
+        // Pontuacao grande:  3   -   1
+        var big = new GUIStyle { fontSize = 44, alignment = TextAnchor.UpperCenter };
+        big.normal.textColor = Color.white;
+        GUI.Label(new Rect(0, 30, Screen.width, 56), scoreLeft + "    -    " + scoreRight, big);
+
+        // Rotulos dos lados
+        var side = new GUIStyle { fontSize = 16, alignment = TextAnchor.UpperCenter };
+        side.normal.textColor = new Color(1, 1, 1, 0.6f);
+        GUI.Label(new Rect(Screen.width / 2f - 175, 46, 110, 24), "VOCE", side);
+        GUI.Label(new Rect(Screen.width / 2f + 65,  46, 110, 24), "CPU",  side);
+
+        // Cronometro (fica vermelho nos ultimos 10 segundos)
+        var clock = new GUIStyle { fontSize = 22, alignment = TextAnchor.UpperCenter };
+        clock.normal.textColor = timeLeft <= 10f ? new Color(1f, 0.45f, 0.45f) : Color.white;
+        GUI.Label(new Rect(0, 88, Screen.width, 28), Mathf.CeilToInt(timeLeft) + "s", clock);
+
+        // Dica de controles no rodape
+        var hint = new GUIStyle { fontSize = 15, alignment = TextAnchor.LowerCenter };
         hint.normal.textColor = new Color(1, 1, 1, 0.5f);
-        string controles = TwoPlayer
-            ? "P1: mouse ou W / S      P2: setas Cima / Baixo"
-            : "Mova com o MOUSE (ou W / S)";
-        GUI.Label(new Rect(0, Screen.height - 36, Screen.width, 24),
-                  controles + "      Dificuldade: " + difficulty +
-                  "   (1 Facil  2 Medio  3 Dificil)", hint);
+        GUI.Label(new Rect(0, Screen.height - 30, Screen.width, 22),
+                  (TwoPlayer ? "P1: mouse ou W / S    P2: setas" : "Mova com o MOUSE (ou W / S)")
+                  + "   -   primeiro a " + PointsToWin + " ou maior placar em " + (int)MatchTime + "s vence", hint);
 
-        // Mensagem de vitoria
-        if (gameOver)
+        // Tela entre partidas
+        if (matchOver)
         {
-            var big = new GUIStyle { fontSize = 42, alignment = TextAnchor.MiddleCenter };
-            big.normal.textColor = Color.yellow;
-            GUI.Label(new Rect(0, Screen.height / 2f - 70, Screen.width, 60), message, big);
+            var title = new GUIStyle { fontSize = 32, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            title.normal.textColor = Color.yellow;
+            GUI.Label(new Rect(0, Screen.height / 2f - 70, Screen.width, 90), message, title);
 
-            var sub = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleCenter };
+            var sub = new GUIStyle { fontSize = 20, alignment = TextAnchor.MiddleCenter };
             sub.normal.textColor = Color.white;
-            GUI.Label(new Rect(0, Screen.height / 2f, Screen.width, 30),
-                      "Pressione ESPACO para jogar de novo", sub);
+            GUI.Label(new Rect(0, Screen.height / 2f + 30, Screen.width, 30),
+                      "Pressione ESPACO para continuar", sub);
         }
     }
 }

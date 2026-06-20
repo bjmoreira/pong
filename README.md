@@ -12,15 +12,23 @@ O jogo inteiro (câmera, raquetes, bola, placar, colisões e IA) é gerado por u
 4. Abra a cena `Assets/Scenes/Pong.unity` (ou simplesmente aperte Play em qualquer cena — o jogo se monta sozinho).
 5. Aperte o botão **▶ Play**.
 
-## Controles
+## Como jogar
 
-| Ação | Tecla |
-|------|-------|
-| Mover raquete para cima | `W` |
-| Mover raquete para baixo | `S` |
-| Jogar de novo (após fim de jogo) | `Espaço` |
+Você enfrenta a CPU numa **progressão de 50 níveis** de dificuldade, começando no nível 1.
 
-Por padrão você joga contra uma **CPU**. O primeiro a fazer **5 pontos** vence.
+**Regras de cada partida:**
+- Primeiro a fazer **5 pontos** vence; ou
+- Após **1 minuto**, quem tiver o maior placar vence.
+- **Empate no tempo:** repete o mesmo nível.
+- **Você venceu:** avança para o próximo nível.
+- **A CPU venceu:** você volta para o **nível 1**.
+
+A IA fica progressivamente mais rápida e precisa conforme o nível sobe.
+
+| Ação | Controle |
+|------|----------|
+| Mover raquete | **Mouse** (ou `W` / `S`) |
+| Começar a próxima partida | `Espaço` |
 
 ## Ajustando o jogo
 
@@ -28,7 +36,9 @@ Abra [`PongGame.cs`](Assets/Scripts/PongGame.cs) e mexa nas constantes do topo:
 
 ```csharp
 const float BallStartSpeed = 7f;     // velocidade da bola
-const int   ScoreToWin     = 5;      // pontos para vencer
+const int   PointsToWin    = 5;      // pontos para vencer a partida
+const float MatchTime      = 60f;    // duração máxima de cada partida (segundos)
+const int   MaxLevel       = 50;     // total de níveis de dificuldade
 const bool  TwoPlayer      = false;  // true = 2 jogadores (P2 usa as setas)
 ```
 
