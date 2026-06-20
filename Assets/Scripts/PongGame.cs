@@ -21,8 +21,11 @@ public class PongGame : MonoBehaviour
     const bool  TwoPlayer     = false;  // false = voce vs CPU | true = 2 jogadores
 
     // ---- Progressao ----
+    const float TransitionTime = 3f;  // segundos de contagem regressiva entre niveis
     int   level = 1;        // nivel atual (1 a 50): sobe ao vencer, zera ao perder
     float timeLeft;         // segundos restantes na partida atual
+    float transitionTimer;  // > 0 = mostrando a contagem antes do proximo nivel
+    string banner = "";     // mensagem grande exibida durante a contagem
 
     // ---- Estado interno ----
     Camera cam;
@@ -30,8 +33,6 @@ public class PongGame : MonoBehaviour
     Vector2 ballVel;
     float halfWidth, halfHeight, paddleX;
     int scoreLeft, scoreRight;
-    bool matchOver;
-    string message = "";
 
     // Faz o jogo se montar sozinho assim que a cena carrega,
     // mesmo numa cena vazia. Nao precisa arrastar nada no editor.
@@ -102,13 +103,12 @@ public class PongGame : MonoBehaviour
 
     void Update()
     {
-        // Entre partidas: espera ESPACO ou clique do mouse para a proxima.
-        // (O clique tambem resolve o caso do Game view sem foco de teclado.)
-        if (matchOver)
+        // Entre niveis: roda a contagem regressiva e libera o proximo sozinho.
+        if (transitionTimer > 0f)
         {
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
-                StartMatch();
-            return;
+            transitionTimer -= Time.deltaTime;
+            if (transitionTimer <= 0f) StartMatch();
+            return;   // jogo pausado durante a contagem
         }
 
         // Cronometro: quando zera, quem tiver mais pontos vence
@@ -256,7 +256,7 @@ public class PongGame : MonoBehaviour
     {
         scoreLeft = scoreRight = 0;
         timeLeft = MatchTime;
-        matchOver = false;
+        transitionTimer = 0f;
         left.position  = new Vector3(-paddleX, 0, 0);
         right.position = new Vector3(paddleX, 0, 0);
         ResetBall(Random.value < 0.5f ? 1 : -1);
@@ -274,32 +274,33 @@ public class PongGame : MonoBehaviour
     {
         if (scoreLeft > scoreRight)      PlayerWins();
         else if (scoreRight > scoreLeft) PlayerLoses();
-        else
-        {
-            matchOver = true;
-            message = "TEMPO ESGOTADO - EMPATE!\nRepete o nivel " + level;
-        }
+        else BeginTransition("TEMPO ESGOTADO - EMPATE!");
     }
 
     // Jogador venceu: avanca de nivel (ou zera o jogo ao passar do nivel 50).
     void PlayerWins()
     {
-        matchOver = true;
         if (level >= MaxLevel)
-            message = "INCRIVEL! Voce zerou os " + MaxLevel + " niveis!";
+            BeginTransition("VOCE ZEROU OS " + MaxLevel + " NIVEIS!");
         else
         {
             level++;
-            message = "Voce venceu!\nAvancando para o nivel " + level;
+            BeginTransition("VOCE VENCEU!");
         }
     }
 
     // Jogador perdeu para a maquina: volta para o nivel 1.
     void PlayerLoses()
     {
-        matchOver = true;
-        message = "A CPU venceu...\nVoce volta para o nivel 1";
         level = 1;
+        BeginTransition("A CPU VENCEU!");
+    }
+
+    // Inicia a contagem regressiva; ao zerar, StartMatch() comeca o proximo nivel.
+    void BeginTransition(string msg)
+    {
+        banner = msg;
+        transitionTimer = TransitionTime;
     }
 
     // Desenha placar, linha do meio e mensagens na tela.
@@ -313,10 +314,13 @@ public class PongGame : MonoBehaviour
         GUI.color = Color.white;
 
         // ---- Placar do topo ----
-        // Nivel atual
-        var lvl = new GUIStyle { fontSize = 18, alignment = TextAnchor.UpperCenter };
+        // Nivel atual no CANTO SUPERIOR ESQUERDO
+        var lvl = new GUIStyle { fontSize = 24, alignment = TextAnchor.UpperLeft, fontStyle = FontStyle.Bold };
         lvl.normal.textColor = new Color(0.55f, 0.85f, 1f);
-        GUI.Label(new Rect(0, 8, Screen.width, 24), "NIVEL  " + level + " / " + MaxLevel, lvl);
+        GUI.Label(new Rect(16, 12, 280, 32), "Level " + level, lvl);
+        var lvlSub = new GUIStyle { fontSize = 13, alignment = TextAnchor.UpperLeft };
+        lvlSub.normal.textColor = new Color(1, 1, 1, 0.4f);
+        GUI.Label(new Rect(18, 42, 200, 20), "de " + MaxLevel, lvlSub);
 
         // Pontuacao grande:  3   -   1
         var big = new GUIStyle { fontSize = 44, alignment = TextAnchor.UpperCenter };
@@ -341,17 +345,23 @@ public class PongGame : MonoBehaviour
                   (TwoPlayer ? "P1: mouse ou W / S    P2: setas" : "Mova com o MOUSE (ou W / S)")
                   + "   -   primeiro a " + PointsToWin + " ou maior placar em " + (int)MatchTime + "s vence", hint);
 
-        // Tela entre partidas
-        if (matchOver)
+        // Contagem regressiva entre os niveis (3, 2, 1) e libera o proximo sozinho
+        if (transitionTimer > 0f)
         {
-            var title = new GUIStyle { fontSize = 32, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            var title = new GUIStyle { fontSize = 38, alignment = TextAnchor.MiddleCenter, wordWrap = true, fontStyle = FontStyle.Bold };
             title.normal.textColor = Color.yellow;
-            GUI.Label(new Rect(0, Screen.height / 2f - 70, Screen.width, 90), message, title);
+            GUI.Label(new Rect(0, Screen.height / 2f - 160, Screen.width, 70), banner, title);
 
-            var sub = new GUIStyle { fontSize = 20, alignment = TextAnchor.MiddleCenter };
-            sub.normal.textColor = Color.white;
-            GUI.Label(new Rect(0, Screen.height / 2f + 30, Screen.width, 30),
-                      "Clique ou aperte ESPACO para continuar", sub);
+            // Numero GIGANTE da contagem
+            var count = new GUIStyle { fontSize = 140, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            count.normal.textColor = Color.white;
+            GUI.Label(new Rect(0, Screen.height / 2f - 100, Screen.width, 190),
+                      Mathf.CeilToInt(transitionTimer).ToString(), count);
+
+            // Proximo nivel a comecar
+            var next = new GUIStyle { fontSize = 28, alignment = TextAnchor.MiddleCenter };
+            next.normal.textColor = new Color(0.6f, 0.85f, 1f);
+            GUI.Label(new Rect(0, Screen.height / 2f + 110, Screen.width, 40), "Level " + level, next);
         }
     }
 }
