@@ -1,0 +1,27 @@
+# Normaliza fins de linha automaticamente
+* text=auto
+
+# Scripts e textos sempre com LF no repositorio
+*.cs        text diff=csharp
+*.json      text
+*.md        text
+*.txt       text
+*.gitignore text
+*.gitattributes text
+
+# Arquivos do Unity (YAML) tratados como texto para diffs legiveis
+*.unity     text
+*.meta      text
+*.asset     text
+*.prefab    text
+*.mat       text
+
+# Arquivos binarios (nunca normalizar)
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.fbx  binary
+*.dll  binary

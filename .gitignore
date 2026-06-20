@@ -1,0 +1,37 @@
+# Pastas geradas pelo Unity (nao versionar)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# Cache de Asset Store
+[Aa]ssets/AssetStoreTools*
+
+# Arquivos do Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.user
+*.userprefs
+*.suo
+*.tmp
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Crash reports
+sysinfo.txt
+crashlytics-build.properties
