@@ -102,10 +102,12 @@ public class PongGame : MonoBehaviour
 
     void Update()
     {
-        // Entre partidas: espera ESPACO para iniciar a proxima
+        // Entre partidas: espera ESPACO ou clique do mouse para a proxima.
+        // (O clique tambem resolve o caso do Game view sem foco de teclado.)
         if (matchOver)
         {
-            if (Input.GetKeyDown(KeyCode.Space)) StartMatch();
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+                StartMatch();
             return;
         }
 
@@ -349,7 +351,7 @@ public class PongGame : MonoBehaviour
             var sub = new GUIStyle { fontSize = 20, alignment = TextAnchor.MiddleCenter };
             sub.normal.textColor = Color.white;
             GUI.Label(new Rect(0, Screen.height / 2f + 30, Screen.width, 30),
-                      "Pressione ESPACO para continuar", sub);
+                      "Clique ou aperte ESPACO para continuar", sub);
         }
     }
 }
