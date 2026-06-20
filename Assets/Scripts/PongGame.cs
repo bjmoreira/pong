@@ -18,6 +18,10 @@ public class PongGame : MonoBehaviour
     const int   ScoreToWin    = 5;      // pontos para vencer
     const bool  TwoPlayer     = false;  // false = voce vs CPU | true = 2 jogadores
 
+    // ---- Niveis de dificuldade (controlam quao boa e a IA) ----
+    enum Difficulty { Facil, Medio, Dificil }
+    Difficulty difficulty = Difficulty.Facil;   // comeca no facil
+
     // ---- Estado interno ----
     Camera cam;
     Transform left, right, ball;
@@ -96,6 +100,11 @@ public class PongGame : MonoBehaviour
 
     void Update()
     {
+        // Troca de dificuldade a qualquer momento com as teclas 1, 2, 3
+        if (Input.GetKeyDown(KeyCode.Alpha1)) difficulty = Difficulty.Facil;
+        if (Input.GetKeyDown(KeyCode.Alpha2)) difficulty = Difficulty.Medio;
+        if (Input.GetKeyDown(KeyCode.Alpha3)) difficulty = Difficulty.Dificil;
+
         if (gameOver)
         {
             if (Input.GetKeyDown(KeyCode.Space))
@@ -107,27 +116,34 @@ public class PongGame : MonoBehaviour
             return;
         }
 
-        // Raquete da esquerda: teclas W / S
-        float lMove = 0;
-        if (Input.GetKey(KeyCode.W)) lMove += 1;
-        if (Input.GetKey(KeyCode.S)) lMove -= 1;
-        MovePaddle(left, lMove);
-
-        // Raquete da direita: setas (2 jogadores) ou IA simples
-        float rMove;
-        if (TwoPlayer)
+        // Raquete da esquerda: segue o mouse (ou teclas W / S)
+        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
         {
-            rMove = 0;
-            if (Input.GetKey(KeyCode.UpArrow))   rMove += 1;
-            if (Input.GetKey(KeyCode.DownArrow)) rMove -= 1;
+            float lMove = 0;
+            if (Input.GetKey(KeyCode.W)) lMove += 1;
+            if (Input.GetKey(KeyCode.S)) lMove -= 1;
+            MovePaddle(left, lMove);
         }
         else
         {
-            // IA: persegue a bola, mas limitada para ser vencivel
-            float diff = ball.position.y - right.position.y;
-            rMove = Mathf.Clamp(diff * 1.8f, -0.85f, 0.85f);
+            // Converte a posicao do mouse na tela para o mundo e segue o eixo Y
+            float mouseWorldY = cam.ScreenToWorldPoint(
+                new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10f)).y;
+            SetPaddleY(left, mouseWorldY);
         }
-        MovePaddle(right, rMove);
+
+        // Raquete da direita: setas (2 jogadores) ou IA com dificuldade
+        if (TwoPlayer)
+        {
+            float rMove = 0;
+            if (Input.GetKey(KeyCode.UpArrow))   rMove += 1;
+            if (Input.GetKey(KeyCode.DownArrow)) rMove -= 1;
+            MovePaddle(right, rMove);
+        }
+        else
+        {
+            UpdateAI();
+        }
 
         // Move a bola
         Vector3 p = ball.position;
@@ -157,6 +173,68 @@ public class PongGame : MonoBehaviour
         float limit = halfHeight - PaddleHeight / 2f;
         pos.y = Mathf.Clamp(pos.y, -limit, limit);
         t.position = pos;
+    }
+
+    // Posiciona a raquete diretamente numa altura (usado pelo controle do mouse).
+    void SetPaddleY(Transform t, float y)
+    {
+        float limit = halfHeight - PaddleHeight / 2f;
+        Vector3 pos = t.position;
+        pos.y = Mathf.Clamp(y, -limit, limit);
+        t.position = pos;
+    }
+
+    // Inteligencia artificial da raquete da direita.
+    // Cada dificuldade muda 3 coisas: velocidade da IA, "zona morta"
+    // (margem em que ela nao se move) e se ela so reage quando a bola vem.
+    void UpdateAI()
+    {
+        float maxSpeed;      // velocidade maxima da IA (player tem PaddleSpeed = 10)
+        float deadzone;      // se estiver perto do alvo dentro dessa margem, nao mexe
+        bool reactOnlyWhenApproaching;  // ignora a bola quando ela esta indo embora
+
+        switch (difficulty)
+        {
+            case Difficulty.Facil:   // lenta, preguicosa e imprecisa
+                maxSpeed = PaddleSpeed * 0.40f;
+                deadzone = 1.0f;
+                reactOnlyWhenApproaching = true;
+                break;
+            case Difficulty.Medio:   // razoavel, mas vencivel
+                maxSpeed = PaddleSpeed * 0.65f;
+                deadzone = 0.45f;
+                reactOnlyWhenApproaching = true;
+                break;
+            default:                 // Dificil: rapida e precisa
+                maxSpeed = PaddleSpeed * 0.95f;
+                deadzone = 0.10f;
+                reactOnlyWhenApproaching = false;
+                break;
+        }
+
+        // Decide para onde a IA quer ir:
+        // - se a bola vem na direcao dela, persegue a altura da bola
+        // - senao, relaxa e volta devagar para o centro
+        float targetY;
+        if (!reactOnlyWhenApproaching || ballVel.x > 0)
+            targetY = ball.position.y;
+        else
+            targetY = 0f;
+
+        float diff = targetY - right.position.y;
+
+        // Perto o bastante do alvo? Entao nao mexe (e isso que a deixa "burra"
+        // e permite que voce ganhe pontos no canto).
+        if (Mathf.Abs(diff) <= deadzone) return;
+
+        // Move em direcao ao alvo, sem ultrapassar e respeitando a velocidade maxima.
+        float step = Mathf.Sign(diff) * maxSpeed * Time.deltaTime;
+        if (Mathf.Abs(step) > Mathf.Abs(diff)) step = diff;
+
+        float limit = halfHeight - PaddleHeight / 2f;
+        Vector3 pos = right.position;
+        pos.y = Mathf.Clamp(pos.y + step, -limit, limit);
+        right.position = pos;
     }
 
     // Rebate a bola se ela encostar na raquete e estiver indo em direcao a ela.
@@ -217,9 +295,12 @@ public class PongGame : MonoBehaviour
         // Dica de controles
         var hint = new GUIStyle { fontSize = 16, alignment = TextAnchor.LowerCenter };
         hint.normal.textColor = new Color(1, 1, 1, 0.5f);
+        string controles = TwoPlayer
+            ? "P1: mouse ou W / S      P2: setas Cima / Baixo"
+            : "Mova com o MOUSE (ou W / S)";
         GUI.Label(new Rect(0, Screen.height - 36, Screen.width, 24),
-                  TwoPlayer ? "P1: W / S      P2: setas Cima / Baixo"
-                            : "Mova a raquete com  W  e  S", hint);
+                  controles + "      Dificuldade: " + difficulty +
+                  "   (1 Facil  2 Medio  3 Dificil)", hint);
 
         // Mensagem de vitoria
         if (gameOver)
